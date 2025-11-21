@@ -3,14 +3,19 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.cluster import KMeans
+from sklearn.model_selection import train_test_split
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.svm import SVC
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import classification_report, accuracy_score
 from sklearn.decomposition import PCA
 import streamlit as st
 from streamlit_lottie import st_lottie
 import requests
 
-# ----------------------------------------------------------
-# Load Lottie Animations (Safe loader)
-# ----------------------------------------------------------
+# ---------------------------
+# Load Lottie Animations
+# ---------------------------
 def load_lottie(url: str):
     try:
         r = requests.get(url)
@@ -20,78 +25,52 @@ def load_lottie(url: str):
     except:
         return None
 
-# Verified working animations
 lottie_cluster = load_lottie("https://assets4.lottiefiles.com/packages/lf20_touohxv0.json")
 lottie_upload = load_lottie("https://assets9.lottiefiles.com/packages/lf20_j1adxtyb.json")
 
-# ----------------------------------------------------------
-# Streamlit Page Settings
-# ----------------------------------------------------------
-st.set_page_config(
-    page_title="India SDG Clustering",
-    layout="wide",
-    page_icon="📊"
-)
+# ---------------------------
+# Streamlit Settings
+# ---------------------------
+st.set_page_config(page_title="India SDG Clustering & Classification", layout="wide", page_icon="📊")
 
-# ----------------------------------------------------------
-# Header Section
-# ----------------------------------------------------------
-col1, col2 = st.columns([2, 1])
+# Header
+col1, col2 = st.columns([2,1])
 with col1:
-    st.title("🇮🇳 India SDG Index – Interactive Clustering Dashboard")
-    st.markdown("""
-    ### 🔍 Explore SDG Education Indicators Across Indian States  
-    Upload the dataset, choose number of clusters, and visualize insights interactively.
-    """)
+    st.title("🇮🇳 India SDG Index – Clustering & Classification Dashboard")
+    st.markdown("### Upload the dataset to see clustering and supervised model predictions.")
 with col2:
     if lottie_cluster:
         st_lottie(lottie_cluster, height=140)
-    else:
-        st.write("🎨 Animation unavailable")
 
-# ----------------------------------------------------------
 # Sidebar Controls
-# ----------------------------------------------------------
 st.sidebar.header("⚙️ Dashboard Controls")
-
 theme = st.sidebar.selectbox("Theme Mode", ["Light", "Dark"])
 k_clusters = st.sidebar.slider("Number of Clusters (K)", 2, 10, 3)
 pca_toggle = st.sidebar.checkbox("Show PCA Visualization", True)
 
-st.sidebar.markdown("---")
-st.sidebar.write("Made with ❤️ using Streamlit")
-
-# Apply theme mode
 if theme == "Dark":
     sns.set_theme(style="darkgrid")
 else:
     sns.set_theme(style="whitegrid")
 
-# ----------------------------------------------------------
-# File Upload Section
-# ----------------------------------------------------------
+# File Upload
 st.subheader("📁 Upload Your Dataset")
-
 if lottie_upload:
     st_lottie(lottie_upload, height=120)
-else:
-    st.info("Upload your CSV file below:")
-
 uploaded_file = st.file_uploader("Upload India_SDG_Index_Indicator_List_2021 CSV", type=["csv"])
 
-# ----------------------------------------------------------
-# Main App Logic (Runs After CSV Upload)
-# ----------------------------------------------------------
+# ---------------------------
+# Main Logic
+# ---------------------------
 if uploaded_file is not None:
     df = pd.read_csv(uploaded_file)
-
     st.success("✅ File uploaded successfully!")
     st.write("### 🔎 Raw Data Preview")
     st.dataframe(df.head(), use_container_width=True)
 
-    # ----------------------------------------------------------
-    # Column Cleanup + Renaming
-    # ----------------------------------------------------------
+    # ---------------------------
+    # Column Cleanup & Renaming
+    # ---------------------------
     rename_cols = {
         'Gross Enrollment Ratio in Higher Education (18-23 years)': 'GER_HigherEd',
         'Literacy Rate of Youth (15-24 years)': 'Youth_Literacy',
@@ -120,77 +99,74 @@ if uploaded_file is not None:
     areas = df["Area"]
     X = df.drop(columns=["Area"])
 
-    # ----------------------------------------------------------
     # Scaling
-    # ----------------------------------------------------------
     scaler = MinMaxScaler()
     X_scaled = scaler.fit_transform(X)
 
-    # ----------------------------------------------------------
+    # ---------------------------
     # KMeans Clustering
-    # ----------------------------------------------------------
+    # ---------------------------
     kmeans = KMeans(n_clusters=k_clusters, random_state=42)
     df["Cluster"] = kmeans.fit_predict(X_scaled)
 
-    # ----------------------------------------------------------
-    # Clustered Data Table
-    # ----------------------------------------------------------
     st.subheader("📊 Cluster Assignment")
     st.dataframe(df[["Area", "Cluster"]].sort_values("Cluster"), use_container_width=True)
 
-    # ----------------------------------------------------------
-    # Count Plot
-    # ----------------------------------------------------------
     st.subheader("📈 States per Cluster")
-    fig1, ax1 = plt.subplots(figsize=(7, 4))
+    fig1, ax1 = plt.subplots(figsize=(7,4))
     sns.countplot(x=df["Cluster"], palette="viridis", ax=ax1)
     st.pyplot(fig1)
 
-    # ----------------------------------------------------------
-    # Strip Plot
-    # ----------------------------------------------------------
     st.subheader("📍 State Distribution by Cluster")
-    fig2, ax2 = plt.subplots(figsize=(7, 14))
+    fig2, ax2 = plt.subplots(figsize=(7,14))
     sns.stripplot(x=df["Cluster"], y=df["Area"], palette="viridis", ax=ax2)
     st.pyplot(fig2)
 
-    # ----------------------------------------------------------
-    # Heatmap
-    # ----------------------------------------------------------
     st.subheader("🔥 Cluster Feature Heatmap")
     cluster_summary = df.groupby("Cluster").mean(numeric_only=True)
-
-    fig3, ax3 = plt.subplots(figsize=(14, 6))
+    fig3, ax3 = plt.subplots(figsize=(14,6))
     sns.heatmap(cluster_summary.round(2), annot=True, cmap="coolwarm", ax=ax3)
     st.pyplot(fig3)
 
-    # ----------------------------------------------------------
-    # PCA Visualization (Optional)
-    # ----------------------------------------------------------
     if pca_toggle:
         st.subheader("🧭 PCA Visualization (2D Projection)")
         pca = PCA(n_components=2)
         pca_data = pca.fit_transform(X_scaled)
-
-        fig4, ax4 = plt.subplots(figsize=(8, 6))
-        scatter = ax4.scatter(
-            pca_data[:, 0], pca_data[:, 1],
-            c=df["Cluster"], cmap="viridis",
-            s=90, edgecolors="black"
-        )
+        fig4, ax4 = plt.subplots(figsize=(8,6))
+        scatter = ax4.scatter(pca_data[:,0], pca_data[:,1], c=df["Cluster"], cmap="viridis", s=90, edgecolors="black")
         ax4.set_xlabel("PC 1")
         ax4.set_ylabel("PC 2")
         plt.legend(*scatter.legend_elements(), title="Cluster")
         st.pyplot(fig4)
 
-    # ----------------------------------------------------------
-    # States Per Cluster
-    # ----------------------------------------------------------
     st.subheader("📝 States in Each Cluster")
     for cluster in sorted(df["Cluster"].unique()):
-        states = df[df["Cluster"] == cluster]["Area"].tolist()
+        states = df[df["Cluster"]==cluster]["Area"].tolist()
         st.write(f"### Cluster {cluster}")
         st.success(", ".join(states))
+
+    # ---------------------------
+    # Supervised Models
+    # ---------------------------
+    st.subheader("🤖 Supervised Model Predictions")
+    X_supervised = X_scaled
+    y_supervised = df["Cluster"]  # Use clusters as target
+
+    X_train, X_test, y_train, y_test = train_test_split(X_supervised, y_supervised, test_size=0.2, random_state=42, stratify=y_supervised)
+
+    models = {
+        "RandomForestClassifier": RandomForestClassifier(n_estimators=100, random_state=42),
+        "SVC": SVC(max_iter=10000, random_state=42),
+        "LogisticRegression": LogisticRegression(max_iter=10000, random_state=42)
+    }
+
+    for name, model in models.items():
+        model.fit(X_train, y_train)
+        y_pred = model.predict(X_test)
+        st.markdown(f"### {name}")
+        st.text(f"Accuracy: {accuracy_score(y_test, y_pred):.2f}")
+        st.text("Classification Report:")
+        st.text(classification_report(y_test, y_pred))
 
 else:
     st.info("☝️ Upload the dataset to begin.")
